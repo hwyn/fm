@@ -1,21 +1,15 @@
 {
   "compilerOptions": {
-    "target": "ESNext",    // 编译目标平台
-    "module": "CommonJs", // 组织代码的方式
-    "rootDir": "./university",
-    "outDir": ".",
-    "moduleResolution": "node",
-    "emitDecoratorMetadata": true,  // 让TypeScript支持为带有装饰器的声明生成元数据
-    "experimentalDecorators": true, // 是否启用实验性装饰器特性
-    "noImplicitAny": true,
-    "importHelpers": true,
-    "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "declaration": true,
-    "baseUrl": "./",
+    /* Language and Environment */
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM"],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    /* Modules */
+    "module": "ESNext",
+    "rootDir": ".",
+    "moduleResolution": "Bundler",
     "paths": {
       "@hwy-fm/*": ["./university/*"],
       "@hwy-fm/builder": ["./university/dynamic-builder"],
@@ -25,12 +19,40 @@
       "node_modules/@types",
       "./typings/**/*"
     ],
-    "lib": [ "DOM", "ES2022" ],
+    "resolveJsonModule": true,
+
+    /* Emit */
+    "declaration": true,
+    "outDir": "dist",
+    "importHelpers": true,
+
+    /* Interop Constraints */
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Type Checking */
+    "strict": false,
+    "noImplicitAny": true,
+
+    /* Completeness */
+    "skipLibCheck": true
   },
-  "compileOnSave": false,
   "include": [
-    "./university/**/*",
-    "./typings/**/*"
+    "gulpfile.ts",
+    "script/**/*.ts",
+    "university/**/*",
+    "typings/**/*"
   ],
-  "exclude": []
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.spec.ts"
+  ],
+  "ts-node": {
+    "require": ["tsconfig-paths/register"],
+    "compilerOptions": {
+      "module": "CommonJS"
+    }
+  }
 }
