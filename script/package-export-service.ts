@@ -98,7 +98,7 @@ export class PackageExportService {
 
   private updateRootFields(packageRoot: string, rootFields: Record<string, string>, field: string, key: string, targetPath: string) {
     const absPath = path.join(packageRoot, targetPath);
-    if (!fs.existsSync(absPath)) return;
+    if (field !== 'types' && !fs.existsSync(absPath)) return;
 
     if (field) {
       if (field === 'main' && key === 'node' && rootFields.main) return;

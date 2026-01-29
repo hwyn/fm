@@ -33,7 +33,9 @@ export class BuildScript {
    * Main Entry Point
    */
   public buildAll() {
-    return Object.keys(this.configs.packages).map(name => this.createPackageTasks(name));
+    return Object.keys(this.configs.packages)
+      .filter(name => !this.configs.packages[name].skipBuild)
+      .map(name => this.createPackageTasks(name));
   }
 
   // ===========================================================================
@@ -84,10 +86,11 @@ export class BuildScript {
 
         if (module === 'CommonJs') {
           const originalTask = task;
-          task = (async () => {
-            await originalTask();
-            this.writeCommonJsPackage(path.join(packageRoot, outDir));
-          }) as any;
+          task = () => {
+            return originalTask().on('finish', () => {
+              this.writeCommonJsPackage(path.join(packageRoot, outDir));
+            });
+          };
         }
 
         return this.withName(`${name}-${outDir}`, task);
@@ -148,6 +151,7 @@ export class BuildScript {
   private resolveCompilerOptions({ module, target = 'ESNext', outDir, stripInternal }: BuildOptions) {
     const folderName = path.basename(outDir);
     const isCommonJs = module === 'CommonJs';
+    const isTypes = stripInternal === true;
     const isEsm = ['esm', 'esm5'].includes(folderName);
 
     const paths = { ...this.configPaths };
@@ -167,10 +171,13 @@ export class BuildScript {
     return {
       target,
       declaration: stripInternal,
+      emitDeclarationOnly: isTypes,
       module,
-      moduleResolution: isCommonJs ? 'Node' : 'Bundler',
+      moduleResolution: (isCommonJs || isTypes) ? 'Node' : 'Bundler',
+      resolvePackageJsonExports: !(isCommonJs || isTypes),
       baseUrl: '.',
       paths,
+      isolatedModules: !isTypes,
       downlevelIteration: target === 'es5',
       getCustomTransformers: isEsm ? () => this.createEsmPathTransformer() : undefined
     };
