@@ -120,11 +120,16 @@ export class BuildScript {
       const settings = this.resolveCompilerOptions(options);
       const project = ts.createProject(this.getTsConfigPath(src), settings);
 
-      const sourceStream = gulp.src([`${src}/**/*.ts`, `${src}/**/*.tsx`])
-        .pipe(replace(this.replaceRegexp, this.namespace))
-        .pipe(project());
+      let sourceStream = gulp.src([`${src}/**/*.ts`, `${src}/**/*.tsx`])
+        .pipe(replace(this.replaceRegexp, this.namespace));
 
-      return (stripInternal ? sourceStream.dts : sourceStream.js)
+      if ((src.includes('university/di') || src.endsWith('/di')) && path.basename(outDir) === 'esm') {
+        sourceStream = sourceStream.pipe(replace('declare const AsyncLocalStorage: any;', "import { AsyncLocalStorage } from 'async_hooks';"));
+      }
+
+      const compiledStream = sourceStream.pipe(project());
+
+      return (stripInternal ? compiledStream.dts : compiledStream.js)
         .pipe(gulp.dest(outDir));
     };
   }
