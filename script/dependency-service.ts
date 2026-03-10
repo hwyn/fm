@@ -7,9 +7,11 @@ import { Injectable } from '@hwy-fm/di';
 @Injectable()
 export class DependencyService {
 
-  public collect(src: string): Promise<string[]> {
+  public collect(src: string, exclude?: string[]): Promise<string[]> {
     const dependencies: Set<string> = new Set();
-    const pipeline = gulp.src([`${src}/**/*.{ts,tsx,js,jsx,mjs,cjs}`])
+    const globs = [`${src}/**/*.{ts,tsx,js,jsx,mjs,cjs}`];
+    if (exclude?.length) exclude.forEach(pattern => globs.push(`!${src}/${pattern}`));
+    const pipeline = gulp.src(globs)
       .pipe(through.obj((file, enc, cb) => {
         if (file.isBuffer()) {
           try {
@@ -27,7 +29,6 @@ export class DependencyService {
   }
 
   private visitSourceFile(fileName: string, content: string, dependencies: Set<string>) {
-    // Optimization: setParentNodes=false (4th arg) as we don't need parent pointers
     const sourceFile = ts.createSourceFile(fileName, content, ts.ScriptTarget.Latest, false);
 
     const visit = (node: ts.Node) => {
@@ -42,20 +43,16 @@ export class DependencyService {
   }
 
   private extractModuleSpecifier(node: ts.Node): string | null {
-    // Static imports/exports
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
       node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
       return node.moduleSpecifier.text;
     }
 
-    // Dynamic import() & require()
     if (ts.isCallExpression(node)) {
-      // import('...')
       if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
         const [arg] = node.arguments;
         return ts.isStringLiteral(arg) ? arg.text : null;
       }
-      // require('...')
       if (ts.isIdentifier(node.expression) && node.expression.text === 'require') {
         const [arg] = node.arguments;
         return ts.isStringLiteral(arg) ? arg.text : null;
@@ -66,18 +63,15 @@ export class DependencyService {
   }
 
   private addDependency(dependencies: Set<string>, modulePath: string) {
-    // Ignore relative and absolute paths
-    if (modulePath.startsWith('.') || modulePath.startsWith('/')) {
+    if (modulePath.startsWith('.') || modulePath.startsWith('/') || modulePath.startsWith('node:')) {
       return;
     }
 
-    // Normalize package name: @scope/pkg/sub -> @scope/pkg, pkg/sub -> pkg
     const parts = modulePath.split('/');
     const packageName = modulePath.startsWith('@') && parts.length > 1
       ? `${parts[0]}/${parts[1]}`
       : parts[0];
 
-    // Filter out Node.js built-in modules
     if (!builtinModules.includes(packageName)) {
       dependencies.add(packageName);
     }

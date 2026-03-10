@@ -15,6 +15,7 @@ interface BuildOptions {
   outDir: string;
   target?: string;
   stripInternal?: boolean;
+  exclude?: string[];
 }
 
 @Injectable()
@@ -38,51 +39,43 @@ export class BuildScript {
       .map(name => this.createPackageTasks(name));
   }
 
-  // ===========================================================================
-  // Task Orchestration
-  // ===========================================================================
-
   private createPackageTasks(name: string): [string, any] {
     const config = this.configs.packages[name];
     const context = this.createTaskContext(name, config);
     const { src, ignore, clearDir } = config;
 
-    // 1. Clear Task
     const clearTask = this.withName(`${name}:clear`, () =>
       this.cleanDirectory(context.outDir, clearDir, ignore)
     );
 
-    // 2. Main Types/Build Task
     const mainTask = this.withName(`${name}:types`,
-      this.createBuildTask({ module: 'ESNext', src, outDir: context.outDir, stripInternal: true })
+      this.createBuildTask({ module: 'ESNext', src, outDir: context.outDir, stripInternal: true, exclude: config.exclude })
     );
 
-    // 3. Copy Assets Task
-    const copyTask = this.withName(`${name}:copy`, () =>
-      gulp.src([`${src}/README.md`, `${src}/LICENSE`], { allowEmpty: true }).pipe(gulp.dest(context.outDir))
-    );
+    const copyTask = this.withName(`${name}:copy`, () => {
+      const globs = [`${src}/README.md`, `${src}/LICENSE`];
+      if (config.copyBin) globs.push(`${src}/bin/**/*`);
+      return gulp.src(globs, { allowEmpty: true, base: src }).pipe(gulp.dest(context.outDir));
+    });
 
-    // 4. Variant Builds (ESM, CJS, etc.)
-    const variantTasks = this.createVariantTasks(name, src, context.outDir);
+    const variantTasks = this.createVariantTasks(name, src, context.outDir, config.exclude);
 
-    // 5. Package.json Generation
     const packageTask = this.withName(`${name}:package`, config.packageJson !== false
       ? this.generatePackage.generate(context.outDir, { ...config, buildName: context.buildName })
       : (done: any) => done()
     );
 
-    // Compose Series
     return [name, gulp.series(clearTask, mainTask, gulp.parallel(copyTask, ...variantTasks), packageTask)];
   }
 
-  private createVariantTasks(name: string, src: string, packageRoot: string) {
+  private createVariantTasks(name: string, src: string, packageRoot: string, exclude?: string[]) {
     return Object.entries(this.configs.buildConfig)
       .filter(([_, config]: any) => !!config.builder)
       .map(([folder, config]: any) => {
         const { target, module } = config.builder;
         const outDir = config.folder ?? folder;
 
-        let task = this.createBuildTask({ module, src, outDir: path.join(packageRoot, outDir), target });
+        let task = this.createBuildTask({ module, src, outDir: path.join(packageRoot, outDir), target, exclude });
 
         if (module === 'CommonJs') {
           const originalTask = task;
@@ -109,22 +102,23 @@ export class BuildScript {
     return task;
   }
 
-  // ===========================================================================
-  // Build Logic & File Operations
-  // ===========================================================================
-
   private createBuildTask(options: BuildOptions) {
-    const { src, outDir, stripInternal } = options;
+    const { src, outDir, stripInternal, exclude } = options;
 
     return () => {
       const settings = this.resolveCompilerOptions(options);
       const project = ts.createProject(this.getTsConfigPath(src), settings);
 
-      let sourceStream = gulp.src([`${src}/**/*.ts`, `${src}/**/*.tsx`])
+      const globs = [`${src}/**/*.ts`, `${src}/**/*.tsx`];
+      if (exclude?.length) {
+        exclude.forEach(pattern => globs.push(`!${src}/${pattern}`));
+      }
+
+      let sourceStream = gulp.src(globs)
         .pipe(replace(this.replaceRegexp, this.namespace));
 
       if ((src.includes('university/di') || src.endsWith('/di')) && path.basename(outDir) === 'esm') {
-        sourceStream = sourceStream.pipe(replace('declare const AsyncLocalStorage: any;', "import { AsyncLocalStorage } from 'async_hooks';"));
+        sourceStream = sourceStream.pipe(replace(/declare\s+const\s+AsyncLocalStorage\s*:\s*any\s*;/g, "import { AsyncLocalStorage } from 'async_hooks';"));
       }
 
       const compiledStream = sourceStream.pipe(project());
@@ -136,6 +130,10 @@ export class BuildScript {
 
   private async cleanDirectory(dirPath: string, allow: string[] = [], ignore: string[] = ['.git']) {
     if (!fs.existsSync(dirPath)) return;
+
+    const root = process.cwd();
+    if (!path.resolve(dirPath).startsWith(root) || path.resolve(dirPath) === root) return;
+
     const files = await fs.promises.readdir(dirPath);
     await Promise.all(
       files
@@ -148,10 +146,6 @@ export class BuildScript {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'package.json'), '{"type": "commonjs"}');
   }
-
-  // ===========================================================================
-  // Configuration
-  // ===========================================================================
 
   private resolveCompilerOptions({ module, target = 'ESNext', outDir, stripInternal }: BuildOptions) {
     const folderName = path.basename(outDir);
@@ -177,6 +171,7 @@ export class BuildScript {
       target,
       declaration: stripInternal,
       emitDeclarationOnly: isTypes,
+      sourceMap: !isTypes && !!process.env.SOURCE_MAP,
       module,
       moduleResolution: (isCommonJs || isTypes) ? 'Node' : 'Bundler',
       resolvePackageJsonExports: !(isCommonJs || isTypes),
@@ -204,10 +199,6 @@ export class BuildScript {
 
     return { ...paths, ...aliasedPaths };
   }
-
-  // ===========================================================================
-  // ESM Path Transformers
-  // ===========================================================================
 
   private createEsmPathTransformer() {
     return {
@@ -240,8 +231,8 @@ export class BuildScript {
 
     const newSpecifier = factory.createStringLiteral(newText);
     return tsModel.isImportDeclaration(node)
-      ? factory.updateImportDeclaration(node, node.modifiers, node.importClause, newSpecifier, node.assertClause)
-      : factory.updateExportDeclaration(node, node.modifiers, node.isTypeOnly, node.exportClause, newSpecifier, node.assertClause);
+      ? factory.updateImportDeclaration(node, node.modifiers, node.importClause, newSpecifier, node.attributes)
+      : factory.updateExportDeclaration(node, node.modifiers, node.isTypeOnly, node.exportClause, newSpecifier, node.attributes);
   }
 
   private resolveImportPath(importPath: string, absPath: string) {

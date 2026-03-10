@@ -40,8 +40,12 @@ export class PackageExportService {
     }
 
     files.forEach((fileName) => {
-      if (fs.statSync(path.join(currentRoot, fileName)).isDirectory()) {
+      const fullPath = path.join(currentRoot, fileName);
+      if (fs.statSync(fullPath).isDirectory()) {
         exportArray.push(...this.readExportsPath(packagePath, path.join(root, fileName)));
+      } else if (!root && fileName !== 'index.js' && fileName !== 'package.json' && fileName.endsWith('.js')) {
+        const name = fileName.replace(/\.js$/, '');
+        exportArray.push([name, `${name}.js`]);
       }
     });
 

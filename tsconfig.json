@@ -9,7 +9,13 @@
     /* Modules */
     "module": "ESNext",
     "rootDir": ".",
-    "moduleResolution": "Bundler",
+    "moduleResolution": "Bundler",            // TypeScript 5.0+ 推荐：专门配合打包工具使用
+    "resolvePackageJsonExports": true,        // 强制检查 package.json 的 exports 字段 (与 Bundler 配合)
+    
+    /* Modern Best Practices */
+    "isolatedModules": true,                  // 推荐：确保代码兼容 Babel/SWC/Esbuild 等单文件转译工具
+    "verbatimModuleSyntax": false,            // 推荐未来开启：强制显式使用 import type 导入类型 (目前设为 false 以免报错)
+
     "paths": {
       "@hwy-fm/*": ["./university/*"],
       "@hwy-fm/builder": ["./university/dynamic-builder"],

@@ -19,12 +19,12 @@ export class GeneratePackage {
   }
 
   public generate(packageRoot: string, options: any) {
-    const { src, buildName, version, sideEffects = false, generateDep = true, packageJsonOutDir, forceAutoExports = false, ...extraOptions } = options || {};
+    const { src, buildName, version, sideEffects = false, generateDep = true, packageJsonOutDir, forceAutoExports = false, exclude, ...extraOptions } = options || {};
 
     const skipAutoExport = sideEffects && !forceAutoExports;
 
     return async () => {
-      const dependencies = src ? await this.dependencyService.collect(src) : [];
+      const dependencies = src ? await this.dependencyService.collect(src, exclude) : [];
       const { exports, rootFields } = this.packageExportService.getExportsAndRootFields(
         packageRoot,
         skipAutoExport,
@@ -126,7 +126,10 @@ export class GeneratePackage {
       name,
       version,
       ...rootFields,
-      exports
+      exports: {
+        './package.json': './package.json',
+        ...(exports || {}),
+      }
     };
   }
 
@@ -165,11 +168,9 @@ export class GeneratePackage {
   }
 
   private getCleanDependencyKey(key: string): string {
-    // 提取 Scope 包名: @scope/pkg/sub -> @scope/pkg
     if (key.startsWith('@')) {
       return key.split('/').slice(0, 2).join('/');
     }
-    // 提取普通包名: pkg/sub -> pkg
     return key.split('/')[0];
   }
 
