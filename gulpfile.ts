@@ -5,7 +5,7 @@ import { resolveMinimal, INJECTOR_SCOPE, ROOT_SCOPE, Injector } from '@hwy-fm/di
 import { BuildScript } from './script/build-script';
 
 const namespace = '@hwy-fm/';
-const version = '0.0.1-beta.9.1';
+const version = '0.0.1-beta.9.4';
 
 const pkg = (name: string, options: any = {}) => {
   const { src = `university/${name}`, alias = name, ...rest } = options;
@@ -44,23 +44,27 @@ const configs = {
       generateDep: true,      // 自动分析并生成 package.json 中的 dependencies
       sideEffects: true,      // 标记为有副作用，防止被 Tree-shaking 误删 (如全局注册代码)
       forceAutoExports: true,  // 即便有副作用，也强制自动生成 exports 字段
+      exclude: ['__tests__/**'],
       // skipBuild: true
     }),
     kernel: pkg('kernel', {
       generateDep: true,
       sideEffects: true,
       forceAutoExports: true,
-      exclude: ['__tests__/**'],  // 排除测试文件
+      exclude: ['__tests__/**'],
+      minify: true,
     }),
     std: pkg('std', {
       generateDep: true,
       sideEffects: true,
+      exclude: ['__tests__/**'],
       forceAutoExports: true,
     }),
     cli: pkg('cli', {
       generateDep: true,
       sideEffects: true,
       forceAutoExports: true,
+      exclude: ['__tests__/**'],
       bin: { 'hwy': './bin/cli.mjs' },  // CLI 可执行命令
       copyBin: true,                         // 复制 bin 目录到输出
     }),

@@ -4,6 +4,7 @@ import gulp from 'gulp';
 import tsModel from 'typescript';
 import ts from 'gulp-typescript';
 import replace from 'gulp-replace';
+import terser from 'gulp-terser';
 import { Inject, Injectable } from '@hwy-fm/di';
 
 import { CONFIGS } from './constant';
@@ -16,6 +17,7 @@ interface BuildOptions {
   target?: string;
   stripInternal?: boolean;
   exclude?: string[];
+  minify?: boolean;
 }
 
 @Injectable()
@@ -53,12 +55,12 @@ export class BuildScript {
     );
 
     const copyTask = this.withName(`${name}:copy`, () => {
-      const globs = [`${src}/README.md`, `${src}/LICENSE`];
+      const globs = [`${src}/*.md`, `${src}/LICENSE`];
       if (config.copyBin) globs.push(`${src}/bin/**/*`);
       return gulp.src(globs, { allowEmpty: true, base: src }).pipe(gulp.dest(context.outDir));
     });
 
-    const variantTasks = this.createVariantTasks(name, src, context.outDir, config.exclude);
+    const variantTasks = this.createVariantTasks(name, src, context.outDir, config.exclude, config.minify);
 
     const packageTask = this.withName(`${name}:package`, config.packageJson !== false
       ? this.generatePackage.generate(context.outDir, { ...config, buildName: context.buildName })
@@ -68,14 +70,14 @@ export class BuildScript {
     return [name, gulp.series(clearTask, mainTask, gulp.parallel(copyTask, ...variantTasks), packageTask)];
   }
 
-  private createVariantTasks(name: string, src: string, packageRoot: string, exclude?: string[]) {
+  private createVariantTasks(name: string, src: string, packageRoot: string, exclude?: string[], minify?: boolean) {
     return Object.entries(this.configs.buildConfig)
       .filter(([_, config]: any) => !!config.builder)
       .map(([folder, config]: any) => {
         const { target, module } = config.builder;
         const outDir = config.folder ?? folder;
 
-        let task = this.createBuildTask({ module, src, outDir: path.join(packageRoot, outDir), target, exclude });
+        let task = this.createBuildTask({ module, src, outDir: path.join(packageRoot, outDir), target, exclude, minify });
 
         if (module === 'CommonJs') {
           const originalTask = task;
@@ -117,14 +119,23 @@ export class BuildScript {
       let sourceStream = gulp.src(globs)
         .pipe(replace(this.replaceRegexp, this.namespace));
 
-      if ((src.includes('university/di') || src.endsWith('/di')) && path.basename(outDir) === 'esm') {
-        sourceStream = sourceStream.pipe(replace(/declare\s+const\s+AsyncLocalStorage\s*:\s*any\s*;/g, "import { AsyncLocalStorage } from 'async_hooks';"));
+      if ((src.includes('university/di') || src.endsWith('/di')) && path.basename(outDir) !== 'esm') {
+        sourceStream = sourceStream.pipe(replace(/import\s*\{\s*AsyncLocalStorage\s*\}\s*from\s*['"]async_hooks['"];?/g, 'declare const AsyncLocalStorage: any;'));
       }
 
       const compiledStream = sourceStream.pipe(project());
 
-      return (stripInternal ? compiledStream.dts : compiledStream.js)
-        .pipe(gulp.dest(outDir));
+      let outputStream = (stripInternal ? compiledStream.dts : compiledStream.js);
+
+      if (!stripInternal && options.minify) {
+        outputStream = outputStream.pipe(terser({
+          compress: { dead_code: true, drop_console: false },
+          mangle: { keep_classnames: true, keep_fnames: true },
+          output: { comments: false }
+        }));
+      }
+
+      return outputStream.pipe(gulp.dest(outDir));
     };
   }
 
