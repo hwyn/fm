@@ -1,20 +1,16 @@
 {
   "compilerOptions": {
-    /* Language and Environment */
     "target": "ES2022",
     "lib": ["ES2023", "DOM"],
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
 
-    /* Modules */
     "module": "ESNext",
     "rootDir": ".",
-    "moduleResolution": "Bundler",            // TypeScript 5.0+ 推荐：专门配合打包工具使用
-    "resolvePackageJsonExports": true,        // 强制检查 package.json 的 exports 字段 (与 Bundler 配合)
-    
-    /* Modern Best Practices */
-    "isolatedModules": true,                  // 推荐：确保代码兼容 Babel/SWC/Esbuild 等单文件转译工具
-    "verbatimModuleSyntax": false,            // 推荐未来开启：强制显式使用 import type 导入类型 (目前设为 false 以免报错)
+    "moduleResolution": "Bundler",
+    "resolvePackageJsonExports": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false,
 
     "paths": {
       "@hwy-fm/*": ["./university/*"],
@@ -27,21 +23,17 @@
     ],
     "resolveJsonModule": true,
 
-    /* Emit */
     "declaration": true,
     "outDir": "dist",
     "importHelpers": true,
 
-    /* Interop Constraints */
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
 
-    /* Type Checking */
     "strict": false,
     "noImplicitAny": true,
 
-    /* Completeness */
     "skipLibCheck": true
   },
   "include": [
@@ -56,6 +48,7 @@
     "**/*.spec.ts"
   ],
   "ts-node": {
+    "files": true,
     "require": ["tsconfig-paths/register"],
     "compilerOptions": {
       "module": "CommonJS"

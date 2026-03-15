@@ -19,7 +19,7 @@ export class GeneratePackage {
   }
 
   public generate(packageRoot: string, options: any) {
-    const { src, buildName, version, sideEffects = false, generateDep = true, packageJsonOutDir, forceAutoExports = false, exclude, ...extraOptions } = options || {};
+    const { src, buildName, version, sideEffects = false, generateDep = true, packageJsonOutDir, forceAutoExports = false, exclude, files, ...extraOptions } = options || {};
 
     const skipAutoExport = sideEffects && !forceAutoExports;
 
@@ -42,6 +42,8 @@ export class GeneratePackage {
         generateDep,
         sideEffects,
         templatePackage,
+        packageRoot,
+        files: files || this.resolveFiles(packageRoot),
         ...extraOptions
       });
 
@@ -85,6 +87,10 @@ export class GeneratePackage {
       packageJson.sideEffects = ['*.effects.js'];
     }
 
+    if (extraOptions.files) {
+      packageJson.files = extraOptions.files;
+    }
+
     return this.sortFields(this.cleanupPackageJson(packageJson));
   }
 
@@ -108,13 +114,16 @@ export class GeneratePackage {
   }
 
   private createBaseTemplate(name: string, version: string, exports: any, rootFields: any, extraOptions: any, templatePackage: any = {}) {
+    const { packageRoot, ...restOptions } = extraOptions;
     const defaultTemplate = {
       private: false,
+      publishConfig: { access: 'public' },
       type: 'module',
-      description: '',
+      description: restOptions.description || this.readDescriptionFromReadme(packageRoot) || '',
       scripts: { test: 'echo \'Error: no test specified\' && exit 1' },
-      author: '',
-      license: 'ISC',
+      author: 'hwyn (https://github.com/hwyn)',
+      homepage: 'https://github.com/hwyn',
+      license: 'MIT',
       dependencies: {},
       devDependencies: {}
     };
@@ -122,7 +131,7 @@ export class GeneratePackage {
     return {
       ...defaultTemplate,
       ...templatePackage,
-      ...extraOptions,
+      ...restOptions,
       name,
       version,
       ...rootFields,
@@ -144,7 +153,7 @@ export class GeneratePackage {
       const cleanKey = this.getCleanDependencyKey(depKey);
 
       if (cleanKey.includes(namespace)) {
-        packageJson.dependencies[cleanKey] = `^${version}`;
+        (packageJson.peerDependencies ??= {})[cleanKey] = `^${version}`;
         continue;
       }
 
@@ -187,6 +196,22 @@ export class GeneratePackage {
     }
   }
 
+  private static readonly FILES_EXCLUDE = new Set(['package.json', 'node_modules', '.git', '__tests__', '.DS_Store']);
+
+  private resolveFiles(packageRoot: string): string[] {
+    if (!fs.existsSync(packageRoot)) return [];
+
+    const entries = fs.readdirSync(packageRoot, { withFileTypes: true });
+    const files: string[] = [];
+
+    for (const entry of entries) {
+      if (GeneratePackage.FILES_EXCLUDE.has(entry.name) || entry.name.startsWith('.')) continue;
+      files.push(entry.name);
+    }
+
+    return files.sort();
+  }
+
   private cleanupPackageJson(packageJson: any) {
     if (!packageJson.exports || !Object.keys(packageJson.exports).length) delete packageJson.exports;
     if (!Object.keys(packageJson.dependencies).length) delete packageJson.dependencies;
@@ -196,6 +221,19 @@ export class GeneratePackage {
 
   private readJson(filePath: string) {
     return fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf-8')) : {};
+  }
+
+  private readDescriptionFromReadme(packageRoot: string): string {
+    if (!packageRoot) return '';
+    const readmePath = path.join(packageRoot, 'README.md');
+    if (!fs.existsSync(readmePath)) return '';
+    const lines = fs.readFileSync(readmePath, 'utf-8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('[') || trimmed.startsWith('!')) continue;
+      return trimmed;
+    }
+    return '';
   }
 
   private writeJson(filePath: string, content: any) {

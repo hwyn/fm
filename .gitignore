@@ -4,3 +4,7 @@
 /.idea
 /package-lock.json
 
+/kernel
+/std
+/cli
+/di
