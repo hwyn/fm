@@ -1,0 +1,5 @@
+qwen2.5-3b-instruct-q6_k.gguf
+HY-MT1.5-1.8B-Q6_K.gguf
+
+cd qwen
+cat model.gguf.part* > qwen2.5-3b-instruct-q6_k.gguf
